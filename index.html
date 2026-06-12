@@ -3,27 +3,28 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>한글퍼즐 v1.0 - 5000단어판</title>
+<title>한글퍼즐 v2.1 - 되돌리기 지원</title>
 <style>
 *{box-sizing:border-box}
-body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:900px;margin:auto;padding:15px;background:#fafafa}
-h2{text-align:center}
+body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:920px;margin:auto;padding:15px;background:#fafafa}
+h2{text-align:center;margin:8px 0}
+p{text-align:center}
 .wrap{display:flex;gap:15px;align-items:flex-start;justify-content:center}
 #grid{display:grid;grid-template-columns:repeat(4,72px);gap:7px;touch-action:none}
 .cell{width:72px;height:72px;border:2px solid #888;border-radius:14px;background:#fff;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:800;user-select:none}
 .cell.selected{border:4px solid #222;transform:scale(.96)}
-.side{background:#fff;border:1px solid #ddd;border-radius:14px;padding:12px;width:290px;line-height:1.7}
+.side{background:#fff;border:1px solid #ddd;border-radius:14px;padding:12px;width:300px;line-height:1.7}
 button{padding:9px 12px;margin:4px;border-radius:10px;border:1px solid #999;background:white}
 #current{font-size:22px;font-weight:800;min-height:32px}
 #message{font-weight:800;min-height:28px}
-ul,ol{max-height:160px;overflow-y:auto}
+ol{max-height:170px;overflow-y:auto}
 .stat{display:flex;justify-content:space-between;border-bottom:1px dashed #ddd}
-@media(max-width:720px){.wrap{flex-direction:column;align-items:center}.side{width:100%;max-width:380px}}
+@media(max-width:720px){.wrap{flex-direction:column;align-items:center}.side{width:100%;max-width:390px}}
 </style>
 </head>
 <body>
-<h2>한글퍼즐 v1.0 - 5000단어판</h2>
-<p style="text-align:center">사전을 5000개로 늘린 버전입니다. 정답 공개로 미발견 단어를 볼 수 있어요.</p>
+<h2>한글퍼즐 v2.1 - 되돌리기 지원</h2>
+<p>드래그 중 바로 전 칸으로 되돌아가면 마지막 선택이 취소됩니다.</p>
 
 <div class="wrap">
   <div>
@@ -32,12 +33,15 @@ ul,ol{max-height:160px;overflow-y:auto}
     <div id="current"></div>
     <div id="message"></div>
     <button id="newBtn">새 판</button>
+    <button id="hintBtn">힌트</button>
     <button id="answerBtn">정답 공개</button>
   </div>
 
   <div class="side">
     <div><strong>가능 단어:</strong> <span id="total">0</span>개</div>
     <div><strong>발견:</strong> <span id="foundNum">0</span>/<span id="total2">0</span></div>
+    <div><strong>발견률:</strong> <span id="percent">0</span>%</div>
+    <div><strong>판 번호:</strong> <span id="boardNo">0</span></div>
     <hr>
     <div id="stats"></div>
     <hr>
@@ -56,34 +60,265 @@ const WORDS=['하늘', '바다', '구름', '노을', '햇살', '바람', '나무
 const CH=["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
 const JU=["ㅏ","ㅐ","ㅑ","ㅒ","ㅓ","ㅔ","ㅕ","ㅖ","ㅗ","ㅘ","ㅙ","ㅚ","ㅛ","ㅜ","ㅝ","ㅞ","ㅟ","ㅠ","ㅡ","ㅢ","ㅣ"];
 const JO=["","ㄱ","ㄲ","ㄳ","ㄴ","ㄵ","ㄶ","ㄷ","ㄹ","ㄺ","ㄻ","ㄼ","ㄽ","ㄾ","ㄿ","ㅀ","ㅁ","ㅂ","ㅄ","ㅅ","ㅆ","ㅇ","ㅈ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
-let board=[], answers=[], found=[], selected=[], drawing=false;
-function decompose(word){const out=[];for(const ch of word){const c=ch.charCodeAt(0);if(c>=44032&&c<=55203){const n=c-44032;const cho=Math.floor(n/(21*28));const jung=Math.floor((n%(21*28))/28);const jong=n%28;out.push(CH[cho],JU[jung]);if(jong>0)out.push(JO[jong]);}}return out;}
-function compose(seq){let res="",i=0;while(i<seq.length){const cho=CH.indexOf(seq[i]);const jung=JU.indexOf(seq[i+1]);if(cho>=0&&jung>=0){let jong=0;if(i+2<seq.length){const possible=JO.indexOf(seq[i+2]);const nextIsVowel=JU.includes(seq[i+3]);if(possible>0&&!nextIsVowel){jong=possible;i+=3}else{i+=2}}else{i+=2}res+=String.fromCharCode(44032+(cho*21+jung)*28+jong);}else{res+=seq[i];i++}}return res;}
-function adj(a,b){const ar=Math.floor(a/4),ac=a%4,br=Math.floor(b/4),bc=b%4;return Math.abs(ar-br)<=1&&Math.abs(ac-bc)<=1&&a!==b;}
-const SEEDED_BOARDS=[
-["ㄱ","ㅏ","ㅁ","ㅅ","ㄴ","ㄷ","ㅎ","ㅏ","ㄹ","ㅏ","ㅏ","ㅜ","ㅂ","ㅗ","ㄱ","ㅡ"],
-["ㅅ","ㅏ","ㄹ","ㅏ","ㅇ","ㅎ","ㄴ","ㅡ","ㄹ","ㄱ","ㅜ","ㄹ","ㅂ","ㅏ","ㄷ","ㅏ"],
-["ㄱ","ㅏ","ㅈ","ㅗ","ㄱ","ㅂ","ㅏ","ㅇ","ㄷ","ㅐ","ㅈ","ㅓ","ㄴ","ㄱ","ㅗ","ㅇ"],
-["ㅂ","ㅏ","ㄹ","ㅏ","ㅁ","ㄴ","ㅏ","ㅁ","ㅜ","ㄱ","ㅜ","ㄹ","ㅡ","ㅁ","ㅅ","ㅍ"],
-["ㅅ","ㅏ","ㅈ","ㅣ","ㄴ","ㅊ","ㅐ","ㄱ","ㅅ","ㅣ","ㄱ","ㅖ","ㅁ","ㅣ","ㅅ","ㅗ"],
-["ㅎ","ㅏ","ㄴ","ㅡ","ㄹ","ㅇ","ㅏ","ㅇ","ㅣ","ㄱ","ㅜ","ㄹ","ㅅ","ㅜ","ㅍ","ㅂ"]
-];
-let lastBoardText="";
-function shuffle(arr){const a=[...arr];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
-function canMake(word){const target=decompose(word);if(target.length<3)return false;function dfs(pos,idx,used){if(pos===target.length)return true;for(let i=0;i<16;i++){if(used.has(i))continue;if(!adj(idx,i))continue;if(board[i]!==target[pos])continue;used.add(i);if(dfs(pos+1,i,used))return true;used.delete(i);}return false;}for(let i=0;i<16;i++){if(board[i]===target[0]){const used=new Set([i]);if(dfs(1,i,used))return true;}}return false;}
-function calc(){answers=WORDS.filter(canMake).sort((a,b)=>decompose(a).length-decompose(b).length||a.localeCompare(b,"ko"));}
-function newBoard(){const shuffled=shuffle(SEEDED_BOARDS);for(const cand of shuffled){board=[...cand];calc();if(answers.length>0&&board.join("")!==lastBoardText){lastBoardText=board.join("");break;}}found=[];selected=[];document.getElementById("answerBox").style.display="none";document.getElementById("message").textContent=`새 판! 가능 단어 ${answers.length}개`;draw();render();}
-function draw(){const grid=document.getElementById("grid");grid.innerHTML="";board.forEach((ch,i)=>{const d=document.createElement("div");d.className="cell";d.textContent=ch;d.dataset.i=i;grid.appendChild(d);});}
-function getCell(x,y){const el=document.elementFromPoint(x,y);return el&&el.classList.contains("cell")?el:null;}
-function select(cell){if(!cell||selected.includes(cell))return;if(selected.length){const a=+selected[selected.length-1].dataset.i;const b=+cell.dataset.i;if(!adj(a,b))return;}selected.push(cell);cell.classList.add("selected");updateCurrent();}
-function updateCurrent(){const raw=selected.map(c=>c.textContent);document.getElementById("current").textContent=raw.length?raw.join("")+" → "+compose(raw):"";}
-function clearSelected(){selected.forEach(c=>c.classList.remove("selected"));selected=[];updateCurrent();}
-function finish(){if(!selected.length)return;const word=compose(selected.map(c=>c.textContent));const msg=document.getElementById("message");if(answers.includes(word)&&!found.includes(word)){found.push(word);found.sort((a,b)=>decompose(a).length-decompose(b).length||a.localeCompare(b,"ko"));msg.textContent=`정답! ${word}`;}else if(found.includes(word)){msg.textContent=`${word} 이미 찾았어요.`;}else{msg.textContent=`${word} 없음`;}clearSelected();render();}
-function render(){document.getElementById("total").textContent=answers.length;document.getElementById("total2").textContent=answers.length;document.getElementById("foundNum").textContent=found.length;const stats={};answers.forEach(w=>{const len=decompose(w).length;stats[len]??={total:0,done:0};stats[len].total++;if(found.includes(w))stats[len].done++;});document.getElementById("stats").innerHTML=Object.keys(stats).sort((a,b)=>a-b).map(k=>`<div class="stat"><span>${k}개 조합</span><strong>${stats[k].done}/${stats[k].total}</strong></div>`).join("");document.getElementById("foundList").innerHTML=found.map(w=>`<li>${w}</li>`).join("");document.getElementById("missedList").innerHTML=answers.filter(w=>!found.includes(w)).map(w=>`<li>${w}</li>`).join("");if(answers.length&&found.length===answers.length)document.getElementById("message").textContent="🎉 모두 찾았어요!";}
-document.getElementById("grid").addEventListener("pointerdown",e=>{if(!e.target.classList.contains("cell"))return;drawing=true;clearSelected();select(e.target);e.preventDefault();});
-document.getElementById("grid").addEventListener("pointermove",e=>{if(!drawing)return;select(getCell(e.clientX,e.clientY));e.preventDefault();});
-window.addEventListener("pointerup",()=>{if(!drawing)return;drawing=false;finish();});
+
+const FILL=["ㄱ","ㄴ","ㄷ","ㄹ","ㅁ","ㅂ","ㅅ","ㅇ","ㅈ","ㅎ","ㅏ","ㅓ","ㅗ","ㅜ","ㅡ","ㅣ","ㅐ","ㅔ"];
+let board=[], answers=[], found=[], selected=[], drawing=false, boardCount=0;
+
+function decompose(word){
+  const out=[];
+  for(const ch of word){
+    const c=ch.charCodeAt(0);
+    if(c>=44032&&c<=55203){
+      const n=c-44032;
+      const cho=Math.floor(n/(21*28));
+      const jung=Math.floor((n%(21*28))/28);
+      const jong=n%28;
+      out.push(CH[cho],JU[jung]);
+      if(jong>0)out.push(JO[jong]);
+    }
+  }
+  return out;
+}
+
+const WORD_JAMO = WORDS.map(w=>[w,decompose(w)]).filter(x=>x[1].length>=3 && x[1].length<=12);
+
+function compose(seq){
+  let res="",i=0;
+  while(i<seq.length){
+    const cho=CH.indexOf(seq[i]);
+    const jung=JU.indexOf(seq[i+1]);
+    if(cho>=0&&jung>=0){
+      let jong=0;
+      if(i+2<seq.length){
+        const possible=JO.indexOf(seq[i+2]);
+        const nextIsVowel=JU.includes(seq[i+3]);
+        if(possible>0&&!nextIsVowel){jong=possible;i+=3}else{i+=2}
+      }else{i+=2}
+      res+=String.fromCharCode(44032+(cho*21+jung)*28+jong);
+    }else{res+=seq[i];i++}
+  }
+  return res;
+}
+
+function adj(a,b){
+  const ar=Math.floor(a/4),ac=a%4,br=Math.floor(b/4),bc=b%4;
+  return Math.abs(ar-br)<=1&&Math.abs(ac-bc)<=1&&a!==b;
+}
+
+function neighbors(i){
+  const out=[];
+  for(let j=0;j<16;j++) if(adj(i,j)) out.push(j);
+  return shuffle(out);
+}
+
+function shuffle(arr){
+  const a=[...arr];
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+function tryPlace(jamo){
+  const starts=shuffle([...Array(16).keys()]);
+  for(const s of starts){
+    const path=[s];
+    const used=new Set([s]);
+    function dfs(pos,idx){
+      if(pos===jamo.length) return true;
+      const ns=neighbors(idx);
+      for(const n of ns){
+        if(used.has(n)) continue;
+        if(board[n]!==null && board[n]!==jamo[pos]) continue;
+        used.add(n);
+        path.push(n);
+        if(dfs(pos+1,n)) return true;
+        path.pop();
+        used.delete(n);
+      }
+      return false;
+    }
+    if(board[s]===null || board[s]===jamo[0]){
+      if(dfs(1,s)){
+        for(let k=0;k<jamo.length;k++) board[path[k]]=jamo[k];
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function fillBoard(){
+  for(let i=0;i<16;i++){
+    if(board[i]===null) board[i]=FILL[Math.floor(Math.random()*FILL.length)];
+  }
+}
+
+function canMakeJamo(target){
+  if(target.length<3) return false;
+  function dfs(pos,idx,used){
+    if(pos===target.length) return true;
+    for(let i=0;i<16;i++){
+      if(used.has(i)) continue;
+      if(!adj(idx,i)) continue;
+      if(board[i]!==target[pos]) continue;
+      used.add(i);
+      if(dfs(pos+1,i,used)) return true;
+      used.delete(i);
+    }
+    return false;
+  }
+  for(let i=0;i<16;i++){
+    if(board[i]===target[0]){
+      const used=new Set([i]);
+      if(dfs(1,i,used)) return true;
+    }
+  }
+  return false;
+}
+
+function calcAnswers(){
+  answers=WORD_JAMO.filter(([w,j])=>canMakeJamo(j)).map(([w])=>w);
+  answers=[...new Set(answers)].sort((a,b)=>decompose(a).length-decompose(b).length||a.localeCompare(b,"ko"));
+}
+
+function generateBoard(){
+  let bestBoard=null, bestAnswers=[];
+  const candidates=WORD_JAMO.filter(([w,j])=>j.length>=3 && j.length<=9);
+  for(let attempt=0; attempt<80; attempt++){
+    board=Array(16).fill(null);
+    const chosen=shuffle(candidates).slice(0,4+Math.floor(Math.random()*3));
+    for(const [w,j] of chosen) tryPlace(j);
+    fillBoard();
+    calcAnswers();
+    if(answers.length>bestAnswers.length){ bestBoard=[...board]; bestAnswers=[...answers]; }
+    if(answers.length>=12) break;
+  }
+  board=bestBoard || board;
+  answers=bestAnswers.length ? bestAnswers : answers;
+}
+
+function newBoard(){
+  generateBoard();
+  found=[]; selected=[];
+  boardCount++;
+  document.getElementById("boardNo").textContent=boardCount;
+  document.getElementById("answerBox").style.display="none";
+  document.getElementById("message").textContent=`새 판! 가능 단어 ${answers.length}개`;
+  draw(); render();
+}
+
+function draw(){
+  const grid=document.getElementById("grid");
+  grid.innerHTML="";
+  board.forEach((ch,i)=>{
+    const d=document.createElement("div");
+    d.className="cell"; d.textContent=ch; d.dataset.i=i;
+    grid.appendChild(d);
+  });
+}
+
+function getCell(x,y){
+  const el=document.elementFromPoint(x,y);
+  return el&&el.classList.contains("cell")?el:null;
+}
+
+function select(cell){
+  if(!cell) return;
+
+  // 되돌리기: 드래그 중 바로 전 칸으로 돌아가면 마지막 칸 선택 취소
+  if(selected.length >= 2 && cell === selected[selected.length - 2]){
+    const removed = selected.pop();
+    removed.classList.remove("selected");
+    updateCurrent();
+    return;
+  }
+
+  // 이미 선택한 칸은 재사용하지 않음
+  if(selected.includes(cell)) return;
+
+  // 인접 칸만 선택 가능
+  if(selected.length){
+    const a=+selected[selected.length-1].dataset.i;
+    const b=+cell.dataset.i;
+    if(!adj(a,b))return;
+  }
+
+  selected.push(cell);
+  cell.classList.add("selected");
+  updateCurrent();
+}
+
+function updateCurrent(){
+  const raw=selected.map(c=>c.textContent);
+  document.getElementById("current").textContent=raw.length?raw.join("")+" → "+compose(raw):"";
+}
+
+function clearSelected(){
+  selected.forEach(c=>c.classList.remove("selected"));
+  selected=[]; updateCurrent();
+}
+
+function finish(){
+  if(!selected.length)return;
+  const word=compose(selected.map(c=>c.textContent));
+  const msg=document.getElementById("message");
+  if(answers.includes(word)&&!found.includes(word)){
+    found.push(word);
+    found.sort((a,b)=>decompose(a).length-decompose(b).length||a.localeCompare(b,"ko"));
+    msg.textContent=`정답! ${word}`;
+  }else if(found.includes(word)){
+    msg.textContent=`${word} 이미 찾았어요.`;
+  }else{
+    msg.textContent=`${word} 없음`;
+  }
+  clearSelected(); render();
+}
+
+function showHint(){
+  const remaining=answers.filter(w=>!found.includes(w));
+  if(!remaining.length){document.getElementById("message").textContent="이미 모두 찾았어요!";return;}
+  remaining.sort((a,b)=>decompose(a).length-decompose(b).length||a.localeCompare(b,"ko"));
+  const w=remaining[0], j=decompose(w);
+  document.getElementById("message").textContent=`힌트: ${j.length}개 조합, 첫 자모는 '${j[0]}'`;
+}
+
+function render(){
+  document.getElementById("total").textContent=answers.length;
+  document.getElementById("total2").textContent=answers.length;
+  document.getElementById("foundNum").textContent=found.length;
+  document.getElementById("percent").textContent=answers.length?Math.round(found.length/answers.length*100):0;
+
+  const stats={};
+  answers.forEach(w=>{
+    const len=decompose(w).length;
+    stats[len]??={total:0,done:0};
+    stats[len].total++;
+    if(found.includes(w)) stats[len].done++;
+  });
+  document.getElementById("stats").innerHTML=Object.keys(stats).sort((a,b)=>a-b).map(k=>
+    `<div class="stat"><span>${k}개 조합</span><strong>${stats[k].done}/${stats[k].total}</strong></div>`
+  ).join("");
+  document.getElementById("foundList").innerHTML=found.map(w=>`<li>${w}</li>`).join("");
+  document.getElementById("missedList").innerHTML=answers.filter(w=>!found.includes(w)).map(w=>`<li>${w}</li>`).join("");
+  if(answers.length&&found.length===answers.length) document.getElementById("message").textContent="🎉 모두 찾았어요!";
+}
+
+document.getElementById("grid").addEventListener("pointerdown",e=>{
+  if(!e.target.classList.contains("cell"))return;
+  drawing=true; clearSelected(); select(e.target); e.preventDefault();
+});
+document.getElementById("grid").addEventListener("pointermove",e=>{
+  if(!drawing)return;
+  select(getCell(e.clientX,e.clientY)); e.preventDefault();
+});
+window.addEventListener("pointerup",()=>{
+  if(!drawing)return;
+  drawing=false; finish();
+});
 document.getElementById("newBtn").addEventListener("click",newBoard);
+document.getElementById("hintBtn").addEventListener("click",showHint);
 document.getElementById("answerBtn").addEventListener("click",()=>{document.getElementById("answerBox").style.display="block";render();});
 newBoard();
 </script>
